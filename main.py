@@ -12,11 +12,17 @@ from dto.auth_dto import (
 from repositories.user_repositories import (
     find_user_by_email,
     find_all_users,
-    update_password
+    update_password,
+    find_user_by_id
     )
 from security.password import verify_password,hash_password
 from repositories.user_repositories import find_all_users
 from security.otp import generate_otp
+from security.jwt import generate_token, verify_token
+
+
+
+
 # OTP storage
 otp_storage = {}
 
@@ -41,6 +47,9 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/verify-otp":
             self.handle_verify_otp()
+
+        elif self.path == "/reset-password":
+            self.handle_reset_password()
 
        
 
@@ -260,10 +269,16 @@ class AuthHandler(BaseHTTPRequestHandler):
             )
 
             return
+        
+        token =generate_token(
+            user[0],
+            user[1]
+        )
         self.send_json_response(
                 200,
         {
-            "message": "Login successful"
+            "message": "Login successful",
+            "token":token
             }
         )
         
@@ -532,8 +547,66 @@ class AuthHandler(BaseHTTPRequestHandler):
             200,
         {"message": "OTP verified successfully"}
         )
+    
+    #Reser Password  
+    def handle_reset_password(self):
 
+        print("Reset password endpoint called")
+
+        authorization = self.headers.get("Authorization")
+
+        print("Authorization header:", authorization)
+
+        if not authorization:
+
+            self.send_json_response(
+                401,
+                {"message": "Authorization header required"}
+            )
+
+            return
+
+        parts = authorization.split(" ")
+
+        if len(parts) != 2 or parts[0] != "Bearer":
+
+            self.send_json_response(
+                401,
+                {"message": "Invalid authorization header"}
+            )
+
+            return
+
+        token = parts[1]
+
+        payload=verify_token(token)
+        print("JWT payload:", payload)
+
+        if payload is None:
+            self.send_json_response(
+                401,
+                {"message":"Invalid token"}
+            )
+            return
         
+        user_id=payload["user_id"]
+
+        print("Authenticated User ID:",user_id)
+
+        user = find_user_by_id(user_id)
+
+        if not user:
+
+            self.send_json_response(
+                404,
+                {"message": "User not found"}
+            )
+
+            return
+            
+
+    
+
         
 
 server = HTTPServer(

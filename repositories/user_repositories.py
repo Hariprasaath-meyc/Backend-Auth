@@ -68,7 +68,7 @@ def create_new_user(name,email,password_hash):
 
 def update_password(email,password_hash):
     print("Updating password for:", email)
-    
+
     connection=get_connection()
 
     cursor=connection.cursor()
@@ -87,6 +87,28 @@ def update_password(email,password_hash):
     cursor.close()
 
     connection.close()
+    
+def find_user_by_id(user_id):
+
+    connection=get_connection()
+
+    cursor=connection.cursor()
+
+    cursor.execute(
+        """ 
+        SELECT id,name,email,password_hash
+        FROM users
+        WHERE email =%s
+        """,
+        (id,)  ##Getting the email as a tuple 
+    )
+
+    user=cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    return user
 
     
     
