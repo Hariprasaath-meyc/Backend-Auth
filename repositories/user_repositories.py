@@ -87,8 +87,8 @@ def update_password(email,password_hash):
     cursor.close()
 
     connection.close()
-    
-def find_user_by_id(user_id):
+
+def find_user_by_id(id):
 
     connection=get_connection()
 
@@ -98,7 +98,7 @@ def find_user_by_id(user_id):
         """ 
         SELECT id,name,email,password_hash
         FROM users
-        WHERE email =%s
+        WHERE id =%s
         """,
         (id,)  ##Getting the email as a tuple 
     )
@@ -109,7 +109,27 @@ def find_user_by_id(user_id):
     connection.close()
 
     return user
+#Updating user New Passowrd with email jwt identifcation
+def update_password_by_id(user_id, password_hash):
 
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE users
+        SET password_hash = %s
+        WHERE id = %s
+        """,
+        (password_hash, user_id)
+    )
+
+    print("Rows updated:", cursor.rowcount)
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
     
-    
+
 

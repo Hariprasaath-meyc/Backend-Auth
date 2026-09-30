@@ -7,13 +7,16 @@ from dto.auth_dto import (
     RegisterUserDTO,
     LoginUserDTO,
     ForgotPasswordDTO,
-    ChangePasswordDTO
+    ChangePasswordDTO,
+    ResetPasswordDTO,
+
 )   
 from repositories.user_repositories import (
     find_user_by_email,
     find_all_users,
     update_password,
-    find_user_by_id
+    find_user_by_id,
+    update_password_by_id
     )
 from security.password import verify_password,hash_password
 from repositories.user_repositories import find_all_users
@@ -591,6 +594,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         
         user_id=payload["user_id"]
 
+
         print("Authenticated User ID:",user_id)
 
         user = find_user_by_id(user_id)
@@ -603,8 +607,87 @@ class AuthHandler(BaseHTTPRequestHandler):
             )
 
             return
-            
 
+        #Read the body
+        print("Reading reset password body...")
+
+        content_length = int(
+            self.headers.get("Content-Length", 0)
+        )
+
+        body = self.rfile.read(content_length)
+
+        try:
+
+            data = json.loads(body)
+
+        except json.JSONDecodeError:
+
+            self.send_json_response(
+                400,
+                {"message": "Invalid JSON"}
+            )
+
+            return
+        #DTO Request Data
+        reset_password_data = ResetPasswordDTO(
+           reset_password_data.old_password,
+            reset_password_data.new_password
+        )
+        
+        required_fields = [
+        "old_password",
+        "new_password"  
+            ]
+
+        for field in required_fields:
+
+            if field not in data or not data[field]:
+
+                self.send_json_response(
+                    400,
+                    {"message": f"{field} is required"}
+                )
+
+                return
+            
+        stored_password_hash = user[3]
+
+        print("Stored password hash:", stored_password_hash)
+
+        
+        if not verify_password(
+            data["old_password"],
+            stored_password_hash
+        ):
+            self.send_json_response(
+            401,
+            {"message": "Current password is incorrect"}
+        )
+
+            return
+        
+        print("Old password verified successfully")
+
+        new_password_hash = hash_password(
+            data["new_password"]
+        )
+
+        print("New password hashed successfully")
+
+        update_password_by_id(
+            user_id,
+            new_password_hash
+        )
+
+        self.send_json_response(
+            200,
+            {
+                "message":"Password resetted Successfully"
+            }
+        )
+
+       
     
 
         

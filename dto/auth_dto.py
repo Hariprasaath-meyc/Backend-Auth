@@ -14,8 +14,16 @@ class ForgotPasswordDTO:
 
     def __init__(self, email):
         self.email = email
+        
 class ChangePasswordDTO:
      
      def __init__(self,email,new_password):
           self.email=email
           self.new_password=new_password
+
+class ResetPasswordDTO:
+
+    def __init__(self, old_password, new_password):
+
+        self.old_password = old_password
+        self.new_password = new_password
