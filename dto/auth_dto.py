@@ -27,3 +27,9 @@ class ResetPasswordDTO:
 
         self.old_password = old_password
         self.new_password = new_password
+
+class RetrieveUsersDTO:
+    def __init__(self,id,name,email):
+        self.id=id
+        self.name=name 
+        self.email=email

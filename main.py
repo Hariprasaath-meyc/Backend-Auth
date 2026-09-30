@@ -9,6 +9,7 @@ from dto.auth_dto import (
     ForgotPasswordDTO,
     ChangePasswordDTO,
     ResetPasswordDTO,
+    RetrieveUsersDTO
 
 )   
 from repositories.user_repositories import (
@@ -477,11 +478,31 @@ class AuthHandler(BaseHTTPRequestHandler):
     def handle_users(self):
 
         users = find_all_users()
+        response_users=[]
+
+        for user in users:
+            user_dto=RetrieveUsersDTO(
+                user[0],
+                user[1],
+                user[2]
+            )
+            response_users.append(user_dto)
+            
+            response_data=[]
+            for user in response_users:
+
+                response_data.append(
+                    {
+                    "id":user.id,
+                    "name":user.name,
+                    "email":user.email
+                    }
+                )
 
         self.send_json_response(
             200,
             {
-                "users": users
+                "users": response_data
             }
         )
 
