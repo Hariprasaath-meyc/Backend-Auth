@@ -1,15 +1,20 @@
-
-
+import os
 import psycopg
+from dotenv import load_dotenv
+
+load_dotenv()
+
+db_password = os.getenv("DB_PASSWORD")
+
+
 
 
 def get_connection():
-    connection = psycopg.connect(
+
+    return psycopg.connect(
         host="localhost",
         port=5432,
-        dbname="auth-sample",
+        dbname="authdb",
         user="postgres",
-        password="hari@1355"
+        password=db_password
     )
-
-    return connection

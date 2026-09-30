@@ -678,9 +678,6 @@ class AuthHandler(BaseHTTPRequestHandler):
         )
 
        
-    
-
-        
 
 server = HTTPServer(
     ("localhost", 8000),
