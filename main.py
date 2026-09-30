@@ -19,6 +19,7 @@ from repositories.user_repositories import (
     find_user_by_id,
     update_password_by_id
     )
+from validators.json_validator import send_json_response
 from security.password import verify_password,hash_password
 from repositories.user_repositories import find_all_users
 from security.otp import generate_otp
@@ -71,35 +72,6 @@ class AuthHandler(BaseHTTPRequestHandler):
         if self.path=="/users":
             self.handle_users()
         
-    #JSON Response
-    def send_json_response(self, status_code, response):
-
-        response_body = json.dumps(
-            response
-        ).encode("utf-8")
-
-        self.send_response(status_code)
-
-        self.send_header(
-            "Content-Type",
-            "application/json"
-        )
-
-        self.send_header(
-            "Content-Length",
-            str(len(response_body))
-        )
-
-        self.end_headers()
-        try:
-            self.wfile.write(response_body)
-            self.wfile.flush()
-
-        except ConnectionAbortedError:
-            print("Client closed the connection before receiving the response.")
-            
-
-    
 
     #User Registration 
     def handle_register(self):
@@ -118,7 +90,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message":"Invalid Json Response"}
             )
@@ -137,7 +109,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             if field not in data:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message":f"{field} is required"}
                 )
@@ -146,7 +118,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #Email Validation
         if not data["email"].endswith("@gmail.com"):
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message":"Enter a Valid Gmail Address"}
             )
@@ -154,7 +126,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #Password Validation
         if len(data["password"]) < 8:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message":"Password must be atleast 8 characters"}
             )
@@ -166,7 +138,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #Existing User Validation
         if result == "User already exists":
 
-           self.send_json_response(
+           send_json_response(
                409,
                {"message":"User Already Exists"}
 
@@ -175,7 +147,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         else:
 
-            self.send_json_response(
+            send_json_response(
                 201,
                 {"message":"User Registered Successfully!"}
             )
@@ -201,7 +173,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid Json Response"}
             )
@@ -220,7 +192,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             if field not in data or not data[field]:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message": f"{field} is required"}
                 )
@@ -230,7 +202,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         # Email Validation
         if not data["email"].endswith("@gmail.com"):
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Enter a Valid Gmail Address"}
             )
@@ -240,7 +212,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         # Password Validation
         if len(data["password"]) < 8:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Password must be at least 8 characters"}
             )
@@ -252,7 +224,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         )
         if not user:
 
-         self.send_json_response
+         send_json_response
          ( 401,
         {"message": "Invalid email or password"}
             )
@@ -267,7 +239,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         
         if not password_valid:
 
-            self.send_json_response(
+            send_json_response(
                 401,
                 {"message": "Invalid email or password"}
             )
@@ -278,7 +250,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             user[0],
             user[1]
         )
-        self.send_json_response(
+        send_json_response(
                 200,
         {
             "message": "Login successful",
@@ -287,7 +259,6 @@ class AuthHandler(BaseHTTPRequestHandler):
         )
         
         
-    
     #Forgot Password
     def handle_forgot_password(self):
 
@@ -315,7 +286,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid Json Response"}
             )
@@ -328,7 +299,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             if field not in data or not data[field]:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message": f"{field} is required"}
                 )
@@ -336,7 +307,7 @@ class AuthHandler(BaseHTTPRequestHandler):
                 return
         if not data["email"].endswith("@gmail.com"):
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Enter a Valid Gmail Address"}
             )
@@ -354,7 +325,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         if not user:
 
-            self.send_json_response(
+            send_json_response(
                 404,
                 {"message": "User not found"}
             )
@@ -367,17 +338,17 @@ class AuthHandler(BaseHTTPRequestHandler):
         
         print("OTP Storage:", otp_storage)
 
-        self.send_json_response(
+        send_json_response(
        200,
         {"message": "OTP generated successfully"}
         )
 
-    
+    #Reset Password
     def handle_change_password(self):
 
             
         print("Change password Endpoint working")
-        self.send_json_response(
+        send_json_response(
             200,
             {"message":"Change password enpoint working"}
         )
@@ -397,7 +368,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid Json Response"}
             )
@@ -410,7 +381,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             
             if field not in data or not data[field]:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message": f"{field} is required"}
                 )
@@ -419,7 +390,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #Email Validation
         if not data["email"].endswith("@gmail.com"):
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Enter a Valid Gmail Address"}
             )
@@ -428,7 +399,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #New password Verification
         if len(data["new_password"]) < 8:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Password must be at least 8 characters"}
             )
@@ -448,7 +419,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         #Verification of Users
         if not verified:
 
-            self.send_json_response(
+            send_json_response(
                 401,
                 {"message": "OTP verification required"}
             )
@@ -466,12 +437,10 @@ class AuthHandler(BaseHTTPRequestHandler):
         new_password_hash
         )
 
-        self.send_json_response(
+        send_json_response(
         200,
         {"message": "Password changed successfully"}
         )
-
-
 
 
     #Retrive All users   
@@ -499,7 +468,7 @@ class AuthHandler(BaseHTTPRequestHandler):
                     }
                 )
 
-        self.send_json_response(
+        send_json_response(
             200,
             {
                 "users": response_data
@@ -524,7 +493,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid Json Response"}
             )
@@ -536,7 +505,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             if field not in data or not data[field]:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message": f"{field} is required"}
                 )
@@ -554,7 +523,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         if stored_otp != data["otp"]:
             print(">>> Sending 400 Invalid OTP")
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid OTP"}
             )
@@ -567,7 +536,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         
         print("Verified users:", verified_users)
         
-        self.send_json_response(
+        send_json_response(
             200,
         {"message": "OTP verified successfully"}
         )
@@ -583,7 +552,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         if not authorization:
 
-            self.send_json_response(
+            send_json_response(
                 401,
                 {"message": "Authorization header required"}
             )
@@ -594,7 +563,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         if len(parts) != 2 or parts[0] != "Bearer":
 
-            self.send_json_response(
+            send_json_response(
                 401,
                 {"message": "Invalid authorization header"}
             )
@@ -607,7 +576,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         print("JWT payload:", payload)
 
         if payload is None:
-            self.send_json_response(
+            send_json_response(
                 401,
                 {"message":"Invalid token"}
             )
@@ -622,7 +591,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         if not user:
 
-            self.send_json_response(
+            send_json_response(
                 404,
                 {"message": "User not found"}
             )
@@ -644,7 +613,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
 
-            self.send_json_response(
+            send_json_response(
                 400,
                 {"message": "Invalid JSON"}
             )
@@ -665,7 +634,7 @@ class AuthHandler(BaseHTTPRequestHandler):
 
             if field not in data or not data[field]:
 
-                self.send_json_response(
+                send_json_response(
                     400,
                     {"message": f"{field} is required"}
                 )
@@ -681,7 +650,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             data["old_password"],
             stored_password_hash
         ):
-            self.send_json_response(
+            send_json_response(
             401,
             {"message": "Current password is incorrect"}
         )
@@ -701,7 +670,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             new_password_hash
         )
 
-        self.send_json_response(
+        send_json_response(
             200,
             {
                 "message":"Password resetted Successfully"
@@ -717,7 +686,7 @@ server = HTTPServer(
     ("localhost", 8000),
     AuthHandler
 )
-users = find_all_users()
+
 print("Server running on http://localhost:8000")
 
 server.serve_forever()
