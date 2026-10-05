@@ -1,28 +1,17 @@
-import json
+from jsonschema import validate
+from jsonschema.exceptions import ValidationError
 
 
-def send_json_response(self, status_code, response):
+def validate_request(data, schema):
 
-        response_body = json.dumps(
-            response
-        ).encode("utf-8")
-
-        self.send_response(status_code)
-
-        self.send_header(
-            "Content-Type",
-            "application/json"
+    try:
+        validate(
+            instance=data,
+            schema=schema
         )
 
-        self.send_header(
-            "Content-Length",
-            str(len(response_body))
-        )
+        return True, None
 
-        self.end_headers()
-        try:
-            self.wfile.write(response_body)
-            self.wfile.flush()
-            
-        except ConnectionAbortedError:
-            print("Client closed the connection before receiving the response.")
+    except ValidationError as error:
+
+        return False, error.message
