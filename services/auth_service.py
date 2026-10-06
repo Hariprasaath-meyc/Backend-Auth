@@ -22,7 +22,34 @@ def register_user(register_data):
     user = create_new_user(
         register_data.name,
         register_data.email,
-        password_hash
+        password_hash,
+        "local",
+        None
+    )
+
+    return user
+
+#GitHub Login
+def github_login(github_user,github_email):
+
+    existing_user = find_user_by_email(
+        github_email
+    )
+
+    if existing_user:
+
+        print("GitHub user already exists")
+
+        return existing_user
+    
+    print("GitHub user does not exist. Creating user.")
+    
+    user = create_new_user(
+        github_user["name"] or github_user["login"],
+       github_email,
+        None,
+        "github",
+        str(github_user["id"])
     )
 
     return user

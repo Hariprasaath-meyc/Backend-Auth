@@ -1,5 +1,5 @@
 from database.connection import get_connection
-
+from model.user_model import User
 
 def find_user_by_email(email):
 
@@ -9,7 +9,7 @@ def find_user_by_email(email):
 
     cursor.execute(
         """ 
-        SELECT id,name,email,password_hash
+        SELECT id,name,email,password_hash,auth_provider,provider_user_id
         FROM users
         WHERE email =%s
         """,
@@ -21,7 +21,19 @@ def find_user_by_email(email):
     cursor.close()
     connection.close()
 
-    return user
+
+    if user is None:
+        return None
+
+    return User(
+        id=user[0],
+        name=user[1],
+        email=user[2],
+        password_hash=user[3],
+        auth_provider=user[4],
+        provider_user_id=user[5]
+    )
+
 def find_all_users():
 
     connection = get_connection()
@@ -41,30 +53,62 @@ def find_all_users():
 
     return users
 
-def create_new_user(name,email,password_hash):
+def create_new_user(
+    name,
+    email,
+    password_hash,
+    auth_provider,
+    provider_user_id
+):
 
-    connection=get_connection()
+    connection = get_connection()
+    cursor = connection.cursor()
 
-    cursor=connection.cursor()
-    
     cursor.execute(
         """
-        INSERT INTO users (name,email,password_hash)
-        VALUES(%s,%s,%s)
-        RETURNING id,name,email,password_hash
+        INSERT INTO users (
+            name,
+            email,
+            password_hash,
+            auth_provider,
+            provider_user_id
+        )
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING
+            id,
+            name,
+            email,
+            password_hash,
+            auth_provider,
+            provider_user_id
         """,
-        (name,email,password_hash)
+        (
+            name,
+            email,
+            password_hash,
+            auth_provider,
+            provider_user_id
+        )
     )
 
-    user=cursor.fetchone()
+    user = cursor.fetchone()
 
     connection.commit()
 
     cursor.close()
-
     connection.close()
 
-    return user
+    if user is None:
+        return None
+
+    return User(
+        id=user[0],
+        name=user[1],
+        email=user[2],
+        password_hash=user[3],
+        auth_provider=user[4],
+        provider_user_id=user[5]
+    )
 
 def update_password(email,password_hash):
     print("Updating password for:", email)

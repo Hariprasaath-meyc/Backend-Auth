@@ -1,9 +1,16 @@
 import redis
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+redis_host=os.getenv("REDIS_HOST")
+redis_port = int(os.getenv("REDIS_PORT", 6379))
 
 
 redis_client = redis.Redis(
-    host="localhost",
-    port=6379,
+    host=redis_host,
+    port=redis_port,
     decode_responses=True
 )
 
@@ -28,25 +35,25 @@ def delete_otp(email):
     redis_client.delete(
         f"otp:{email}"
     )
-
-if __name__ == "__main__":
-
-    store_otp(
-        "hari@gmail.com",
-        489321
-    )
-    otp=get_otp(
-        "hari@gmail.com"
-    )
-    print("Redis OTP:",otp)
-
-    delete_otp(
-        "hari@gmail.com"
+#OAuth State Storage
+def store_oauth_state(state):
+    redis_client.set(
+        f"oauth_state:{state}",
+        "1",
+        ex=300
     )
 
-    otp=get_otp(
-        "hari@gmail.com"
+
+def get_oauth_state(state):
+    return redis_client.get(
+        f"oauth_state:{state}"
     )
 
-    print("Redis OTP after deletion:",otp)
+
+def delete_oauth_state(state):
+    redis_client.delete(
+        f"oauth_state:{state}"
+    )
+
+
     

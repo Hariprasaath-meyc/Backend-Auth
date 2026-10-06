@@ -1,8 +1,14 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import secrets
+from urllib.parse import urlparse, parse_qs
+from security.jwt import generate_token
+from storage.redis_client import store_oauth_state
+from security.github_oauth import get_github_authorization_url
+from services.auth_service import (
+    register_user,
+    github_login)
 
-
-from services.auth_service import register_user
 from dto.auth_dto import (
     RegisterUserDTO,
     LoginUserDTO,
@@ -27,6 +33,10 @@ from schemas.auth_schema import (
     change_password_schema,
     verify_otp_schema
 )
+from storage.redis_client import (
+    get_oauth_state,
+    delete_oauth_state
+)
 
 from storage.redis_client import store_otp,get_otp,delete_otp
 from validators.json_validator import validate_request
@@ -34,7 +44,12 @@ from security.password import verify_password,hash_password
 from repositories.user_repositories import find_all_users
 from security.otp import generate_otp
 from security.jwt import generate_token, verify_token
-
+from security.github_oauth import (
+    get_github_authorization_url,
+    exchange_code_for_token,
+     get_github_user,
+     get_github_emails
+)
 
 
 
@@ -101,18 +116,28 @@ class AuthHandler(BaseHTTPRequestHandler):
             self.wfile.write(response_body)
             self.wfile.flush()
             
-        except ConnectionAbortedError:
+        except (ConnectionAbortedError,BrokenPipeError):
             print("Client closed the connection before receiving the response.")
     #Endpoint for Data Retireval
     def do_GET(self):
-       
-        if self.path == "/users":
+         parsed_url = urlparse(self.path)
+
+         path = parsed_url.path
+
+         if path == "/users":
             self.handle_users()
-        else:
+
+         elif path == "/auth/github":
+             self.handle_github_login()
+
+         elif path == "/auth/github/callback":
+             self.handle_github_callback()
+
+         else:
             self.send_json_response(
-                404,
-                {"message":"Endpoint not found"}
-            )
+            404,
+            {"message": "Endpoint not found"}
+        )
         
     
 
@@ -239,7 +264,7 @@ class AuthHandler(BaseHTTPRequestHandler):
             )
          return
 
-        stored_password_hash = user[3]
+        stored_password_hash = user.password_hash
     
         password_valid = verify_password(
                login_data.password,
@@ -256,8 +281,8 @@ class AuthHandler(BaseHTTPRequestHandler):
             return
         
         token =generate_token(
-            user[0],
-            user[1]
+            user.id,
+            user.email
         )
         self.send_json_response(
                 200,
@@ -360,7 +385,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         print("Change password Endpoint working")
         self.send_json_response(
             200,
-            {"message":"Change password enpoint working"}
+            {"message":"Change password endpoint working"}
         )
         content_length = int(
         self.headers.get("Content-Length", 0)
@@ -430,9 +455,9 @@ class AuthHandler(BaseHTTPRequestHandler):
         )
 
         self.send_json_response(
-        200,
-        {"message": "Password changed successfully"}
-        )
+            200,
+            {"message": "Password changed successfully"}
+            )
 
 
     #Retrive All users   
@@ -684,8 +709,236 @@ class AuthHandler(BaseHTTPRequestHandler):
                 "message":"Password resetted Successfully"
             }
         )
+   
+    #Handling GitHub Login
+    def handle_github_login(self):
 
-       
+        print("GitHub OAuth Started Successfully")
+
+        state = secrets.token_urlsafe(32)
+
+        print("Generated state:", state)
+
+        store_oauth_state(state)
+
+        print("OAuth state stored in Redis")
+
+        github_url = get_github_authorization_url(state)
+
+        print("GitHub URL:")
+        print(github_url)
+
+        self.send_response(302)
+
+        self.send_header(
+            "Location",
+            github_url
+        )
+
+        self.end_headers()
+    #CallBack function
+    def handle_github_callback(self):
+
+        print("GitHub OAuth callback received")
+
+        parsed_url = urlparse(self.path)
+
+        query_params = parse_qs(
+            parsed_url.query
+        )
+
+        code = query_params.get(
+            "code",
+            [None]
+        )[0]
+
+        state = query_params.get(
+            "state",
+            [None]
+        )[0]
+
+        print("Authorization code:", code)
+        print("State:", state)
+
+        if not code:
+            self.send_json_response(
+                400,
+                {"message": "Authorization code missing"}
+            )
+            return
+
+        if not state:
+            self.send_json_response(
+                400,
+                {"message": "State missing"}
+            )
+            return
+
+        # Verify OAuth State
+
+        stored_state = get_oauth_state(state)
+
+        print("Stored state:", stored_state)
+
+        if stored_state is None:
+
+            self.send_json_response(
+                400,
+                {"message": "Invalid or expired OAuth state"}
+            )
+            return
+
+        delete_oauth_state(state)
+
+        print("OAuth state verified successfully")
+
+        # Auth Token Exchange for Access Token
+
+        token_response = exchange_code_for_token(code)
+
+        print("GitHub token exchange completed")
+
+        if token_response is None:
+
+            self.send_json_response(
+                500,
+                {"message": "Failed to exchange authorization code"}
+            )
+            return
+
+        # Safe debugging - do NOT print the access token
+
+        print(
+            "Token type:",
+            token_response.get("token_type")
+        )
+
+        print(
+            "Scope:",
+            token_response.get("scope")
+        )
+
+        # Get GitHub Access Token
+
+        access_token = token_response.get(
+            "access_token"
+        )
+
+        if not access_token:
+
+            self.send_json_response(
+                500,
+                {"message": "GitHub access token missing"}
+            )
+            return
+
+        # Get GitHub User Details
+
+        github_user = get_github_user(
+            access_token
+        )
+
+        if github_user is None:
+
+            self.send_json_response(
+                500,
+                {"message": "Failed to retrieve GitHub user"}
+            )
+            return
+
+        # Get GitHub Email Addresses
+
+        github_emails = get_github_emails(
+            access_token
+        )
+
+        print(
+            "GitHub emails:",
+            github_emails
+        )
+        
+
+        if github_emails is None:
+
+            self.send_json_response(
+                500,
+                {"message": "Failed to retrieve GitHub email"}
+            )
+            return
+
+        github_email = None
+
+        for email_data in github_emails:
+
+            if (
+                email_data.get("primary")
+                and email_data.get("verified")
+            ):
+                github_email = email_data.get("email")
+
+                break
+            
+        if github_email is None:
+
+            self.send_json_response(
+                400,
+                {
+                    "message":
+                    "No verified primary GitHub email found"
+                }
+            )
+            return
+
+
+        print(
+            "GitHub email:",
+            github_email
+        )
+
+        print(
+            "GitHub user retrieved successfully"
+        )
+
+# Find or create application user
+
+        user = github_login(
+            github_user,
+            github_email
+        )
+
+        print(
+                "Application user ID:",
+                user.id
+            )
+
+        print(
+                "Application user email:",
+                user.email
+            )
+
+        print(
+                "Authentication provider:",
+                user.auth_provider
+            )
+
+            # Generate application JWT
+
+        token = generate_token(
+                user.id,
+                user.email
+            )
+
+        self.send_json_response(
+                200,
+                {
+                    "message": "GitHub login successful",
+                    "token": token
+                }
+            )
+                
+
+
+
 
 server = HTTPServer(
     ("0.0.0.0", 8000),
