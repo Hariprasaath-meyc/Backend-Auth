@@ -123,8 +123,10 @@ class AuthHandler(BaseHTTPRequestHandler):
          parsed_url = urlparse(self.path)
 
          path = parsed_url.path
-
-         if path == "/users":
+         
+         if path == "/health":
+            self.get_health()
+         elif path == "/users":
             self.handle_users()
 
          elif path == "/auth/github":
@@ -936,7 +938,15 @@ class AuthHandler(BaseHTTPRequestHandler):
                 }
             )
                 
+    def get_health(self):
 
+        self.send_json_response(
+            200,
+            {
+                "status": "healthy",
+                "service": "auth-api"
+            }
+        )
 
 
 

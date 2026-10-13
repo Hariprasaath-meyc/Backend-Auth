@@ -76,7 +76,7 @@ def exchange_code_for_token(code):
         )
 
         return None
-#Retrieve the user with the access token
+#Retrieve the user with the access tokenx
 def get_github_user(access_token):
 
     request = urllib.request.Request(
