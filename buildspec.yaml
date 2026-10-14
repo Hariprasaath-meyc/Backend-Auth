@@ -7,30 +7,30 @@ phases:
       - echo Logging in to Amazon ECR
       - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 369606757523.dkr.ecr.ap-south-1.amazonaws.com
 
-      - API_REPOSITORY_URI=369606757523.dkr.ecr.ap-south-1.amazonaws.com/ci/cd-flow-sample-repository
-      - POSTGRES_REPOSITORY_URI=369606757523.dkr.ecr.ap-south-1.amazonaws.com/ci/cd-flow-postgres
+      - REPOSITORY_URI=369606757523.dkr.ecr.ap-south-1.amazonaws.com/ci/cd-flow-sample-repository
 
       - IMAGE_TAG=$CODEBUILD_RESOLVED_SOURCE_VERSION
       - IMAGE_TAG=${IMAGE_TAG:0:7}
+      - POSTGRES_IMAGE_TAG=${IMAGE_TAG}-postgres
 
   build:
     commands:
       - echo Building the API image
-      - docker build -t $API_REPOSITORY_URI:$IMAGE_TAG .
-      - docker tag $API_REPOSITORY_URI:$IMAGE_TAG $API_REPOSITORY_URI:api
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:api
 
       - echo Building the custom PostgreSQL image with initialization scripts
-      - docker build -f dockerfile.postgres -t $POSTGRES_REPOSITORY_URI:$IMAGE_TAG .
-      - docker tag $POSTGRES_REPOSITORY_URI:$IMAGE_TAG $POSTGRES_REPOSITORY_URI:postgres
+      - docker build -f dockerfile.postgres -t $REPOSITORY_URI:$POSTGRES_IMAGE_TAG .
+      - docker tag $REPOSITORY_URI:$POSTGRES_IMAGE_TAG $REPOSITORY_URI:postgres
 
   post_build:
     commands:
       - echo Pushing API images to ECR
-      - docker push $API_REPOSITORY_URI:$IMAGE_TAG
-      - docker push $API_REPOSITORY_URI:api
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - docker push $REPOSITORY_URI:api
 
       - echo Pushing PostgreSQL images to ECR
-      - docker push $POSTGRES_REPOSITORY_URI:$IMAGE_TAG
-      - docker push $POSTGRES_REPOSITORY_URI:postgres
+      - docker push $REPOSITORY_URI:$POSTGRES_IMAGE_TAG
+      - docker push $REPOSITORY_URI:postgres
 
       - echo API and PostgreSQL image builds and pushes completed
