@@ -1,30 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Create the AuthFlow ECR repository, ECS cluster, reference the existing MyCustomSecurityGroup, register one task definition, and run one ECS task.
 
-Parameters:
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: Existing VPC that contains MyCustomSecurityGroup.
-
-  SubnetId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Existing subnet in the selected VPC.
-
-  TaskExecutionRoleArn:
-    Type: String
-    Description: ARN of an ECS task execution role trusted by ecs-tasks.amazonaws.com.
-    AllowedPattern: '^arn:aws(-[a-z]+)?:iam::[0-9]{12}:role/.+'
-
-  DatabasePasswordSecretArn:
-    Type: String
-    Description: ARN of the Secrets Manager secret containing the PostgreSQL password.
 
 Resources:
   # 1. ECR creation
   AuthFlowRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: authflow-sample-repository
+      RepositoryName: ci/cd-flow-sample-repository
       ImageTagMutability: MUTABLE
       Tags:
         - Key: Project
@@ -34,143 +17,11 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # 2. ECS cluster creation
-  AuthFlowCluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: authflow-sample-cluster
-      ClusterSettings:
-        - Name: containerInsights
-          Value: enabled
-      Tags:
-        - Key: Project
-          Value: AWS Meyi Learnings
-        - Key: CreatedBy
-          Value: Hari
-        - Key: aws-apn-id
-          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # 3. Security Groups: MyCustomSecurityGroup is an existing security group.
-  # It is referenced by its ID in the RunTask output/command guidance below.
-  # No new security group is created.
-
-  # CloudWatch Logs group used by all three containers
-  AuthFlowLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /ecs/authflow
-      RetentionInDays: 14
-      Tags:
-        - Key: Project
-          Value: AWS Meyi Learnings
-        - Key: CreatedBy
-          Value: Hari
-        - Key: aws-apn-id
-          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
-
-  # 4. Task definition: one task containing Python API, PostgreSQL, and Redis
-  AuthFlowTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    DependsOn:
-      - AuthFlowRepository
-      - AuthFlowLogGroup
-    Properties:
-      Family: authflow-all-in-one
-      RequiresCompatibilities:
-        - FARGATE
-      NetworkMode: awsvpc
-      Cpu: '1024'
-      Memory: '2048'
-      ExecutionRoleArn: !Ref TaskExecutionRoleArn
-      Volumes: []
-      ContainerDefinitions:
-        - Name: postgres
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/authflow-sample-repository:postgres16'
-          Essential: true
-          PortMappings:
-            - ContainerPort: 5432
-              Protocol: tcp
-          Environment:
-            - Name: POSTGRES_DB
-              Value: authflow
-            - Name: POSTGRES_USER
-              Value: authuser
-            - Name: PGDATA
-              Value: /var/lib/postgresql/data/pgdata
-          Secrets:
-            - Name: POSTGRES_PASSWORD
-              ValueFrom: !Ref DatabasePasswordSecretArn
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref AuthFlowLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: postgres
-
-        - Name: redis
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/authflow-sample-repository:redis7'
-          Essential: true
-          PortMappings:
-            - ContainerPort: 6379
-              Protocol: tcp
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref AuthFlowLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: redis
-
-        - Name: api
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/authflow-sample-repository:api'
-          Essential: true
-          DependsOn:
-            - ContainerName: postgres
-              Condition: START
-            - ContainerName: redis
-              Condition: START
-          PortMappings:
-            - ContainerPort: 8000
-              Protocol: tcp
-          Environment:
-            - Name: DB_HOST
-              Value: localhost
-            - Name: DB_PORT
-              Value: '5432'
-            - Name: DB_NAME
-              Value: auth-sample
-            - Name: DB_USER
-              Value: postgres
-            - Name: REDIS_HOST
-              Value: localhost
-            - Name: REDIS_PORT
-              Value: '6379'
-          Secrets:
-            - Name: DB_PASSWORD
-              ValueFrom: !Ref DatabasePasswordSecretArn
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref AuthFlowLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: api
 
 Outputs:
   RepositoryUri:
     Description: ECR repository URI
     Value: !GetAtt AuthFlowRepository.RepositoryUri
 
-  ClusterName:
-    Description: ECS cluster name
-    Value: !Ref AuthFlowCluster
-
-  TaskDefinitionArn:
-    Description: ECS task definition ARN
-    Value: !Ref AuthFlowTaskDefinition
-
-  ExistingSecurityGroupId:
-    Description: Existing MyCustomSecurityGroup ID used for RunTask
-    Value: sg-0966cbcdf374ffee4
-
-  RunTaskCommand:
-    Description: Run the task after stack creation using the existing subnet and security group
-    Value: !Sub 'aws ecs run-task --cluster ${AuthFlowCluster} --task-definition ${AuthFlowTaskDefinition} --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[${SubnetId}],securityGroups=[sg-0966cbcdf374ffee4],assignPublicIp=ENABLED}" --region ${AWS::Region}'
+ 
