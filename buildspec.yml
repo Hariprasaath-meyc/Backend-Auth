@@ -8,6 +8,7 @@ env:
 
 
 
+
 phases:
   pre_build:
     commands:
@@ -15,12 +16,17 @@ phases:
       - echo "Repository name: $REPOSITORY_NAME"
       - echo "Region: $AWS_DEFAULT_REGION"
       - |
-        if aws ecr describe-repositories --repository-names "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+        if aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION"; then
           echo "Repository already exists"
         else
-          echo "Repository does not exist or lookup failed; attempting creation"
-          aws ecr create-repository --repository-name "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" || exit 1
+          echo "Repository not found; attempting creation"
+          aws ecr create-repository \
+            --repository-name "$REPOSITORY_NAME" \
+            --region "$AWS_DEFAULT_REGION" || exit 1
         fi
+
 
 
   build:
