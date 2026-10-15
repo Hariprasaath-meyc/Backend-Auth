@@ -5,46 +5,92 @@ env:
   variables:
     AWS_DEFAULT_REGION: ap-south-1
     REPOSITORY_NAME: ci/cd-flow-meyi-repository
-
-
-
+    IMAGE_TAG: latest
+    POSTGRES_IMAGE_TAG: latest
 
 phases:
-
   pre_build:
     commands:
-      - echo "Checking ECR repository"
+      - echo "Checking AWS identity"
+      - aws sts get-caller-identity
       - 'echo "Repository name: $REPOSITORY_NAME"'
       - 'echo "Region: $AWS_DEFAULT_REGION"'
       - |
+        set -e
+
+        echo "Checking ECR repository"
+
         if aws ecr describe-repositories \
           --repository-names "$REPOSITORY_NAME" \
-          --region "$AWS_DEFAULT_REGION"; then
+          --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
           echo "Repository already exists"
         else
           echo "Repository not found; attempting creation"
+
           aws ecr create-repository \
             --repository-name "$REPOSITORY_NAME" \
-            --region "$AWS_DEFAULT_REGION" || exit 1
+            --region "$AWS_DEFAULT_REGION"
         fi
 
+        echo "Retrieving ECR repository URI"
 
+        REPOSITORY_URI=$(aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'repositories[0].repositoryUri' \
+          --output text)
 
+        echo "Repository URI: $REPOSITORY_URI"
+
+        ACCOUNT_ID=$(aws sts get-caller-identity \
+          --query Account \
+          --output text)
+
+        echo "Logging in to ECR"
+
+        aws ecr get-login-password \
+          --region "$AWS_DEFAULT_REGION" |
+          docker login \
+            --username AWS \
+            --password-stdin \
+            "$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
 
   build:
     commands:
       - echo "Building API image"
-      - docker build -t "$REPOSITORY_URI:$IMAGE_TAG" .
-      - docker tag "$REPOSITORY_URI:$IMAGE_TAG" "$REPOSITORY_URI:api"
+      - |
+        REPOSITORY_URI=$(aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'repositories[0].repositoryUri' \
+          --output text)
+
+        docker build -t "$REPOSITORY_URI:$IMAGE_TAG" .
+        docker tag "$REPOSITORY_URI:$IMAGE_TAG" "$REPOSITORY_URI:api"
+
       - echo "Building custom PostgreSQL image with initialization scripts"
-      - docker build -f dockerfile.postgres -t "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" .
-      - docker tag "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" "$REPOSITORY_URI:postgres"
+      - |
+        docker build \
+          -f dockerfile.postgres \
+          -t "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" .
+
+        docker tag \
+          "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" \
+          "$REPOSITORY_URI:postgres"
 
   post_build:
     commands:
       - echo "Pushing API images"
-      - docker push "$REPOSITORY_URI:$IMAGE_TAG"
-      - docker push "$REPOSITORY_URI:api"
+      - |
+        REPOSITORY_URI=$(aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'repositories[0].repositoryUri' \
+          --output text)
+
+        docker push "$REPOSITORY_URI:$IMAGE_TAG"
+        docker push "$REPOSITORY_URI:api"
+
       - echo "Pushing PostgreSQL images"
       - docker push "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG"
       - docker push "$REPOSITORY_URI:postgres"
