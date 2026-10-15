@@ -7,23 +7,19 @@ env:
     REPOSITORY_NAME: ci/cd-flow-meyi-repository
 
 
+
 phases:
   pre_build:
     commands:
-      - echo "Checking AWS identity"
-      - aws sts get-caller-identity
-      - echo "Repository name is [$REPOSITORY_NAME]"
-      - echo "AWS region is [$AWS_DEFAULT_REGION]"
+      - echo "Checking ECR repository"
+      - echo "Repository name: $REPOSITORY_NAME"
+      - echo "Region: $AWS_DEFAULT_REGION"
       - |
-        if aws ecr describe-repositories \
-          --repository-names "$REPOSITORY_NAME" \
-          --region "$AWS_DEFAULT_REGION"; then
+        if aws ecr describe-repositories --repository-names "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
           echo "Repository already exists"
         else
-          echo "Repository lookup failed; attempting creation"
-          aws ecr create-repository \
-            --repository-name "$REPOSITORY_NAME" \
-            --region "$AWS_DEFAULT_REGION" || exit 1
+          echo "Repository does not exist or lookup failed; attempting creation"
+          aws ecr create-repository --repository-name "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" || exit 1
         fi
 
 
