@@ -1,0 +1,38 @@
+
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Preparing ECR repository setup"
+
+  build:
+    commands:
+      - |
+        REPOSITORY_NAME="authflow-repository"
+
+        echo "Checking whether ECR repository exists..."
+
+        if aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+          echo "Repository already exists."
+        else
+          echo "Creating ECR repository..."
+          aws ecr create-repository \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-tag-mutability IMMUTABLE \
+            --region "$AWS_DEFAULT_REGION"
+        fi
+
+        REPOSITORY_URI=$(aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'repositories[0].repositoryUri' \
+          --output text)
+
+        echo "ECR repository URI: $REPOSITORY_URI"
+
+artifacts:
+  files:
+    - '**/*'
