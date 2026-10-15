@@ -4,4 +4,4 @@ version: 0.2
 phases:
   build:
     commands:
-      - echo "AuthFlow build configuration is valid"
+      - echo "AuthFlow buildspec loaded successfully"
