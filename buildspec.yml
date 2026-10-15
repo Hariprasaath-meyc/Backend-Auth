@@ -4,4 +4,4 @@ version: 0.2
 phases:
   build:
     commands:
-      - echo "Buildspec loaded from SourceArtifact"
+      - echo "AuthFlow build action is working"
