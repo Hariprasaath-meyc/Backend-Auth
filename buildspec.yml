@@ -10,11 +10,12 @@ env:
 
 
 phases:
+
   pre_build:
     commands:
       - echo "Checking ECR repository"
-      - echo "Repository name: $REPOSITORY_NAME"
-      - echo "Region: $AWS_DEFAULT_REGION"
+      - 'echo "Repository name: $REPOSITORY_NAME"'
+      - 'echo "Region: $AWS_DEFAULT_REGION"'
       - |
         if aws ecr describe-repositories \
           --repository-names "$REPOSITORY_NAME" \
@@ -26,6 +27,7 @@ phases:
             --repository-name "$REPOSITORY_NAME" \
             --region "$AWS_DEFAULT_REGION" || exit 1
         fi
+
 
 
 
