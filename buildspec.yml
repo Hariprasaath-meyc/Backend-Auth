@@ -6,24 +6,26 @@ env:
     AWS_DEFAULT_REGION: ap-south-1
     REPOSITORY_NAME: ci/cd-flow-meyi-repository
 
+
 phases:
   pre_build:
     commands:
-      - echo "Getting AWS account ID"
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-      - echo "Creating ECR repository if it does not exist"
+      - echo "Checking AWS identity"
+      - aws sts get-caller-identity
+      - echo "Repository name is [$REPOSITORY_NAME]"
+      - echo "AWS region is [$AWS_DEFAULT_REGION]"
       - |
-        if aws ecr describe-repositories --repository-names "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+        if aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION"; then
           echo "Repository already exists"
         else
-          aws ecr create-repository --repository-name "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION"
+          echo "Repository lookup failed; attempting creation"
+          aws ecr create-repository \
+            --repository-name "$REPOSITORY_NAME" \
+            --region "$AWS_DEFAULT_REGION" || exit 1
         fi
-      - REPOSITORY_URI="${ECR_REGISTRY}/${REPOSITORY_NAME}"
-      - echo "Logging in to ECR"
-      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-      - IMAGE_TAG=$(printf '%s' "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-7)
-      - POSTGRES_IMAGE_TAG="${IMAGE_TAG}-postgres"
+
 
   build:
     commands:
