@@ -2,35 +2,37 @@
 version: 0.2
 
 phases:
-  pre_build:
+  install:
     commands:
-      - echo Logging in to Amazon ECR
-      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 369606757523.dkr.ecr.ap-south-1.amazonaws.com
-
-      - REPOSITORY_URI=369606757523.dkr.ecr.ap-south-1.amazonaws.com/ci/cd-flow-sample-repository
-
-      - IMAGE_TAG=$CODEBUILD_RESOLVED_SOURCE_VERSION
-      - IMAGE_TAG=${IMAGE_TAG:0:7}
-      - POSTGRES_IMAGE_TAG=${IMAGE_TAG}-postgres
+      - echo "Preparing ECR repository setup"
 
   build:
     commands:
-      - echo Building the API image
-      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
-      - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:api
+      - |
+        REPOSITORY_NAME="authflow-repository"
 
-      - echo Building the custom PostgreSQL image with initialization scripts
-      - docker build -f dockerfile.postgres -t $REPOSITORY_URI:$POSTGRES_IMAGE_TAG .
-      - docker tag $REPOSITORY_URI:$POSTGRES_IMAGE_TAG $REPOSITORY_URI:postgres
+        echo "Checking whether ECR repository exists..."
 
-  post_build:
-    commands:
-      - echo Pushing API images to ECR
-      - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - docker push $REPOSITORY_URI:api
+        if aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+          echo "Repository already exists."
+        else
+          echo "Creating ECR repository..."
+          aws ecr create-repository \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-tag-mutability IMMUTABLE \
+            --region "$AWS_DEFAULT_REGION"
+        fi
 
-      - echo Pushing PostgreSQL images to ECR
-      - docker push $REPOSITORY_URI:$POSTGRES_IMAGE_TAG
-      - docker push $REPOSITORY_URI:postgres
+        REPOSITORY_URI=$(aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'repositories[0].repositoryUri' \
+          --output text)
 
-      - echo API and PostgreSQL image builds and pushes completed
+        echo "ECR repository URI: $REPOSITORY_URI"
+
+artifacts:
+  files:
+    - '**/*'
