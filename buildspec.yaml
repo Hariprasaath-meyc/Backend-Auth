@@ -1,6 +1,19 @@
+
 version: 0.2
 
 phases:
+  install:
+    commands:
+      - echo "Install phase started"
+
+  pre_build:
+    commands:
+      - echo "Pre-build phase started"
+
   build:
     commands:
       - echo "AuthFlow build action is working"
+
+  post_build:
+    commands:
+      - echo "Build completed successfully"
