@@ -1,27 +1,62 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Create the AuthFlow ECR repository, ECS cluster, reference the existing MyCustomSecurityGroup, register one task definition, and run one ECS task.
+Description: >
+  AuthFlow foundation: create an ECR repository and an ECS cluster configured
+  for Fargate. Deploy this stack before building and pushing the first image.
 
+Parameters:
+  ProjectName:
+    Type: String
+    Default: AuthFlow-meyi-hp
+    Description: Project name used in resource tags.
+
+  RepositoryName:
+    Type: String
+    Default: ci/cd-flow-repository
+    Description: ECR repository name.
 
 Resources:
-  # 1. ECR creation
   AuthFlowRepository:
     Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      RepositoryName: ci/cd-flow-sample-repository
+      RepositoryName: !Ref RepositoryName
       ImageTagMutability: MUTABLE
       Tags:
         - Key: Project
-          Value: AWS Meyi Learnings
+          Value: !Ref ProjectName
         - Key: CreatedBy
           Value: Hari
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-
+  AuthFlowCluster:
+    Type: AWS::ECS::Cluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ClusterName: !Sub '${ProjectName}-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
 Outputs:
+  RepositoryName:
+    Description: ECR repository name to use in CodeBuild.
+    Value: !Ref AuthFlowRepository
   RepositoryUri:
-    Description: ECR repository URI
+    Description: ECR repository URI.
     Value: !GetAtt AuthFlowRepository.RepositoryUri
-
- 
+  ClusterName:
+    Description: ECS cluster name.
+    Value: !Ref AuthFlowCluster
+  ClusterArn:
+    Description: ECS cluster ARN.
+    Value: !GetAtt AuthFlowCluster.Arn

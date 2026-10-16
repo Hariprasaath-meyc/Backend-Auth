@@ -1,45 +1,63 @@
-
 version: 0.2
 
 env:
   variables:
     AWS_DEFAULT_REGION: ap-south-1
-    REPOSITORY_NAME: ci/cd-flow-meyi-repository
+    REPOSITORY_NAME: ci/cd-flow-sample-repository
 
 phases:
   pre_build:
     commands:
-      - echo "Getting AWS account ID"
-      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-      - echo "Creating ECR repository if it does not exist"
       - |
-        if aws ecr describe-repositories --repository-names "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-          echo "Repository already exists"
-        else
-          aws ecr create-repository --repository-name "$REPOSITORY_NAME" --region "$AWS_DEFAULT_REGION"
-        fi
-      - REPOSITORY_URI="${ECR_REGISTRY}/${REPOSITORY_NAME}"
-      - echo "Logging in to ECR"
-      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-      - IMAGE_TAG=$(printf '%s' "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-7)
-      - POSTGRES_IMAGE_TAG="${IMAGE_TAG}-postgres"
+        echo "Getting AWS account ID..."
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        REPOSITORY_URI="${ECR_REGISTRY}/${REPOSITORY_NAME}"
+
+        echo "Logging in to the existing ECR repository..."
+        aws ecr get-login-password --region "$AWS_DEFAULT_REGION" \
+          | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+        IMAGE_TAG=$(printf '%s' "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-7)
+        POSTGRES_IMAGE_TAG="${IMAGE_TAG}-postgres"
+
+        echo "Repository URI: $REPOSITORY_URI"
+        echo "Image tag: $IMAGE_TAG"
 
   build:
     commands:
-      - echo "Building API image"
-      - docker build -t "$REPOSITORY_URI:$IMAGE_TAG" .
-      - docker tag "$REPOSITORY_URI:$IMAGE_TAG" "$REPOSITORY_URI:api"
-      - echo "Building custom PostgreSQL image with initialization scripts"
-      - docker build -f dockerfile.postgres -t "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" .
-      - docker tag "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG" "$REPOSITORY_URI:postgres"
+      - |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        REPOSITORY_URI="${ECR_REGISTRY}/${REPOSITORY_NAME}"
+        IMAGE_TAG=$(printf '%s' "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-7)
+        POSTGRES_IMAGE_TAG="${IMAGE_TAG}-postgres"
+
+        echo "Building API image..."
+        docker build -t "${REPOSITORY_URI}:${IMAGE_TAG}" .
+        docker tag "${REPOSITORY_URI}:${IMAGE_TAG}" "${REPOSITORY_URI}:api"
+
+        echo "Building custom PostgreSQL image..."
+        docker build -f dockerfile.postgres \
+          -t "${REPOSITORY_URI}:${POSTGRES_IMAGE_TAG}" .
+        docker tag "${REPOSITORY_URI}:${POSTGRES_IMAGE_TAG}" \
+          "${REPOSITORY_URI}:postgres"
 
   post_build:
     commands:
-      - echo "Pushing API images"
-      - docker push "$REPOSITORY_URI:$IMAGE_TAG"
-      - docker push "$REPOSITORY_URI:api"
-      - echo "Pushing PostgreSQL images"
-      - docker push "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG"
-      - docker push "$REPOSITORY_URI:postgres"
-      - echo "API and PostgreSQL images pushed successfully"
+      - |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        REPOSITORY_URI="${ECR_REGISTRY}/${REPOSITORY_NAME}"
+        IMAGE_TAG=$(printf '%s' "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-7)
+        POSTGRES_IMAGE_TAG="${IMAGE_TAG}-postgres"
+
+        echo "Pushing API images..."
+        docker push "${REPOSITORY_URI}:${IMAGE_TAG}"
+        docker push "${REPOSITORY_URI}:api"
+
+        echo "Pushing PostgreSQL images..."
+        docker push "${REPOSITORY_URI}:${POSTGRES_IMAGE_TAG}"
+        docker push "${REPOSITORY_URI}:postgres"
+
+        echo "All images pushed successfully."
