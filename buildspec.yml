@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: ap-south-1
-    REPOSITORY_NAME: ci/cd-flow-sample-repository
+    REPOSITORY_NAME: ci/cd-flow-repository
 
 phases:
   pre_build:
