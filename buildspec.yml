@@ -30,25 +30,21 @@ phases:
   post_build:
     commands:
       - echo Pushing API images to ECR
+
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - docker push $REPOSITORY_URI:api
 
-        docker push "$REPOSITORY_URI:$IMAGE_TAG"
-        docker push "$REPOSITORY_URI:api"
 
       - echo "Pushing PostgreSQL images"
+
       - docker push "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG"
       - docker push "$REPOSITORY_URI:postgres"
+
       - echo "API and PostgreSQL images pushed successfully"
 
       - echo "Creating imagedefinitions.json"
       - |
-        REPOSITORY_URI=$(aws ecr describe-repositories \
-          --repository-names "$REPOSITORY_NAME" \
-          --region "$AWS_DEFAULT_REGION" \
-          --query 'repositories[0].repositoryUri' \
-          --output text)
-
+      
         printf '[{"name":"py","imageUri":"%s:%s"}]' \
           "$REPOSITORY_URI" "$IMAGE_TAG" > imagedefinitions.json
 
