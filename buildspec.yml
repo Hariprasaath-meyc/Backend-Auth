@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: ap-south-1
-    REPOSITORY_NAME: ci/cd-flow-meyi-repository
+    REPOSITORY_NAME: ci/cd-flow-repository
     IMAGE_TAG: latest
     POSTGRES_IMAGE_TAG: latest
 
