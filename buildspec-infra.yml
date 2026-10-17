@@ -19,7 +19,7 @@ phases:
     commands:
       - |
         set -eu
-
+        
         echo "Checking ECR repository"
 
         if aws ecr describe-repositories \
@@ -29,9 +29,13 @@ phases:
         else
           echo "Creating ECR repository"
           aws ecr create-repository \
-            --repository-name "$REPOSITORY_NAME" \
-            --image-tag-mutability MUTABLE \
-            --region "$AWS_DEFAULT_REGION"
+              --repository-name "$REPOSITORY_NAME" \
+              --image-tag-mutability MUTABLE \
+              --tags \
+                Key=Project,Value="Meyi AWS Learnings" \
+                Key=CreatedBy,Value=Hari \
+                Key=aws-apn-id,Value=pc:eyl8vo7kcwv8k9qctzbathhiq \
+              --region "$AWS_DEFAULT_REGION"
         fi
 
         echo "Checking ECS cluster"
@@ -46,10 +50,14 @@ phases:
           echo "ECS cluster already exists and is active"
         else
           echo "Creating ECS cluster"
-          aws ecs create-cluster \
-            --cluster-name "$CLUSTER_NAME" \
-            --settings name=containerInsights,value=enabled \
-            --region "$AWS_DEFAULT_REGION"
+         aws ecs create-cluster \
+              --cluster-name "$CLUSTER_NAME" \
+              --settings name=containerInsights,value=enabled \
+              --tags \
+                key=Project,value="Meyi AWS Learnings" \
+                key=CreatedBy,value=Hari \
+                key=aws-apn-id,value=pc:eyl8vo7kcwv8k9qctzbathhiq \
+              --region "$AWS_DEFAULT_REGION"
         fi
 
         echo "Checking CloudWatch log group"
@@ -62,9 +70,10 @@ phases:
           echo "Log group already exists"
         else
           echo "Creating CloudWatch log group"
-          aws logs create-log-group \
-            --log-group-name "$LOG_GROUP_NAME" \
-            --region "$AWS_DEFAULT_REGION"
+         aws logs create-log-group \
+              --log-group-name "$LOG_GROUP_NAME" \
+              --tags '{"Project":"Meyi AWS Learnings","CreatedBy":"Hari","aws-apn-id":"pc:eyl8vo7kcwv8k9qctzbathhiq"}' \
+              --region "$AWS_DEFAULT_REGION"
         fi
 
         echo "Infrastructure provisioning completed"
