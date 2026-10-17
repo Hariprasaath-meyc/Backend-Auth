@@ -34,3 +34,5 @@ services:
 
 volumes:
   postgres_data:
+
+  #Completed Buildspec.yml and compose.yaml files for CI/CD pipeline with Docker, PostgreSQL
