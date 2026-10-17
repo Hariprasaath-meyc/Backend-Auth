@@ -1,0 +1,269 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  AuthFlow foundation infrastructure. Creates the ECR repository, ECS Fargate
+  cluster, task execution role, API and PostgreSQL task definition, CloudWatch
+  log group, and ECS service. Exports resource values for the separate CI/CD
+  pipeline stack.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: Meyi AWS Learnings
+    Description: Project name used in resource tags.
+
+  RepositoryName:
+    Type: String
+    Default: sample-repository-hp
+    Description: ECR repository name.
+
+  ClusterName:
+    Type: String
+    Default: sample-cluster-hp
+    Description: ECS cluster name.
+
+  ApiImageTag:
+    Type: String
+    Default: api
+    Description: Tag of the API image stored in ECR.
+
+  PostgresImageTag:
+    Type: String
+    Default: postgres
+    Description: Tag of the PostgreSQL image stored in ECR.
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Existing subnet IDs in the VPC used by the ECS tasks.
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Existing ECS task security group ID.
+
+  DatabaseName:
+    Type: String
+    Default: auth-sample
+    Description: PostgreSQL database name.
+
+  DatabaseUser:
+    Type: String
+    Default: postgres
+    Description: PostgreSQL database user.
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: PostgreSQL password. Use a secret store for production.
+
+Resources:
+  # ECR repository used by the API and PostgreSQL images.
+  AuthFlowRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # ECS cluster where the Fargate service runs.
+  AuthFlowCluster:
+    Type: AWS::ECS::Cluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ClusterName: !Ref ClusterName
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # Shared CloudWatch log group for API and PostgreSQL container logs.
+  AuthFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /codepipeline/sample-hp
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # ECS task execution role used to pull ECR images and publish container logs.
+  AuthFlowTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Allows ECS to pull ECR images and publish container logs.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # Fargate task definition containing the API and PostgreSQL containers.
+  AuthFlowApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: authflow-api-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt AuthFlowTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: authflow-api
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:${ApiImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AuthFlowLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: api
+
+        - Name: db
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:${PostgresImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5432
+              Protocol: tcp
+          Environment:
+            - Name: POSTGRES_DB
+              Value: !Ref DatabaseName
+            - Name: POSTGRES_USER
+              Value: !Ref DatabaseUser
+            - Name: POSTGRES_PASSWORD
+              Value: !Ref DatabasePassword
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AuthFlowLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: postgres
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - !Sub 'pg_isready -U ${DatabaseUser} -d ${DatabaseName}'
+            Interval: 30
+            Timeout: 5
+            Retries: 5
+            StartPeriod: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # ECS service. DesiredCount remains 0 as in the supplied template.
+  AuthFlowApiService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AuthFlowApiTaskDefinition
+    Properties:
+      ServiceName: authflow-api-service
+      Cluster: !Ref AuthFlowCluster
+      TaskDefinition: !Ref AuthFlowApiTaskDefinition
+      DesiredCount: 0
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups:
+            - !Ref SecurityGroupId
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+Outputs:
+  RepositoryName:
+    Description: ECR repository name for the pipeline build role.
+    Value: !Ref AuthFlowRepository
+    Export:
+      Name: AuthFlow-RepositoryName
+
+  RepositoryUri:
+    Description: ECR repository URI for CodeBuild image pushes.
+    Value: !GetAtt AuthFlowRepository.RepositoryUri
+    Export:
+      Name: AuthFlow-RepositoryUri
+
+  ClusterName:
+    Description: ECS cluster name for deployment and verification.
+    Value: !Ref AuthFlowCluster
+    Export:
+      Name: AuthFlow-ClusterName
+
+  ClusterArn:
+    Description: ECS cluster ARN.
+    Value: !GetAtt AuthFlowCluster.Arn
+    Export:
+      Name: AuthFlow-ClusterArn
+
+  TaskDefinitionArn:
+    Description: Current ECS task definition ARN.
+    Value: !Ref AuthFlowApiTaskDefinition
+    Export:
+      Name: AuthFlow-TaskDefinitionArn
+
+  TaskExecutionRoleArn:
+    Description: ECS task execution role ARN.
+    Value: !GetAtt AuthFlowTaskExecutionRole.Arn
+    Export:
+      Name: AuthFlow-TaskExecutionRoleArn
+
+  LogGroupName:
+    Description: CloudWatch log group name.
+    Value: !Ref AuthFlowLogGroup
+    Export:
+      Name: AuthFlow-LogGroupName
+
+  ServiceName:
+    Description: ECS service name for the ECS deployment action.
+    Value: !Ref AuthFlowApiService
+    Export:
+      Name: AuthFlow-ServiceName

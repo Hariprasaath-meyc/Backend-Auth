@@ -1,0 +1,424 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  AuthFlow CI/CD pipeline stack. Reuses ECR, ECS cluster, ECS service,
+  task execution role, and CloudWatch log group exported by the existing
+  foundation stack. Creates only the pipeline artifact bucket, pipeline role,
+  CodeBuild roles/projects, and CodePipeline.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: Meyi AWS Learnings
+    Description: Project name used in resource tags.
+
+  GitHubConnectionArn:
+    Type: String
+    Default: arn:aws:codeconnections:ap-south-1:369606757523:connection/7fc4acb7-5bc8-4d07-b463-6f636a28b9c7
+    Description: Existing AWS CodeConnections connection to GitHub.
+
+  GitHubOwner:
+    Type: String
+    Default: Hariprasath-meyc
+
+  GitHubRepository:
+    Type: String
+    Default: Backend-Auth
+
+  GitHubBranch:
+    Type: String
+    Default: main
+
+Resources:
+  # Pipeline Artifact Bucket
+  PipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # IAM Roles and Policies for CodePipeline and CodeBuild
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Service role assumed by AWS CodePipeline for AuthFlow.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthFlowPipelinePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ArtifactBucketAccess
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt PipelineArtifactBucket.Arn
+
+              - Sid: ArtifactObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource: !Sub '${PipelineArtifactBucket.Arn}/*'
+
+              - Sid: GitHubConnectionAccess
+                Effect: Allow
+                Action:
+                  - codeconnections:UseConnection
+                Resource: !Ref GitHubConnectionArn
+
+              - Sid: CodeBuildOperations
+                Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource:
+                  - !GetAtt ImageBuildProject.Arn
+                  - !GetAtt DeployVerifyProject.Arn
+
+              - Sid: ECSDeployment
+                Effect: Allow
+                Action:
+                  - ecs:DescribeClusters
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                  - ecs:TagResource
+                  - iam:PassRole
+                Resource: '*'
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # IAM Role for Image Building using CodeBuld
+  ImageBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: CodeBuild role for building and pushing AuthFlow images.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthFlowImageBuildPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ECRLogin
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+
+              - Sid: ECRImagePushPull
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:ListImages
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${RepositoryName}'
+                  - RepositoryName: !ImportValue AuthFlow-RepositoryName
+
+              - Sid: ArtifactBucketAccess
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt PipelineArtifactBucket.Arn
+
+              - Sid: ArtifactObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource: !Sub '${PipelineArtifactBucket.Arn}/*'
+
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # IaM Role for Deployment Verification using ECSDeploy
+  DeployVerifyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: CodeBuild role for checking ECS service deployment stability.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AuthFlowVerifyPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ECSReadOnlyVerification
+                Effect: Allow
+                Action:
+                  - ecs:DescribeClusters
+                  - ecs:DescribeServices
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                Resource: '*'
+
+              - Sid: ArtifactBucketAccess
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt PipelineArtifactBucket.Arn
+
+              - Sid: ArtifactObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${PipelineArtifactBucket.Arn}/*'
+
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # CodeBuild Projects for Image Building and Deployment Verification
+  ImageBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: authflow-image-build
+      Description: Build and push the API and PostgreSQL images to the existing ECR repository.
+      ServiceRole: !GetAtt ImageBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec-infra.yml
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REPOSITORY_URI
+            Value: !ImportValue AuthFlow-RepositoryUri
+          - Name: CLUSTER_NAME
+            Value: !ImportValue AuthFlow-ClusterName
+          - Name: LOG_GROUP_NAME
+            Value: !ImportValue AuthFlow-LogGroupName
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  DeployVerifyProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: authflow-deploy-verify
+      Description: Verify ECS service stability after deployment.
+      ServiceRole: !GetAtt DeployVerifyRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - set -e
+                - aws ecs wait services-stable --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region "$AWS_DEFAULT_REGION"
+                - aws ecs describe-services --cluster "$CLUSTER_NAME" --services "$SERVICE_NAME" --region "$AWS_DEFAULT_REGION" --query 'services[0].{Status:status,Desired:desiredCount,Running:runningCount,Pending:pendingCount}' --output json
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: CLUSTER_NAME
+            Value: !ImportValue AuthFlow-ClusterName
+          - Name: SERVICE_NAME
+            Value: !ImportValue AuthFlow-ServiceName
+      TimeoutInMinutes: 20
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+  # Overall CodePipeline Definition
+  AuthFlowPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn:
+      - ImageBuildProject
+      - DeployVerifyProject
+    Properties:
+      Name: authflow-end-to-end-pipeline
+      RoleArn: !GetAtt PipelineRole.Arn
+      PipelineType: V1
+      ExecutionMode: SUPERSEDED
+      ArtifactStore:
+        Type: S3
+        Location: !Ref PipelineArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Ref GitHubConnectionArn
+                FullRepositoryId: !Sub '${GitHubOwner}/${GitHubRepository}'
+                BranchName: !Ref GitHubBranch
+                DetectChanges: 'true'
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: BuildAndPushImages
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref ImageBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+
+        - Name: Deploy
+          Actions:
+            - Name: DeployToECS
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ECS
+                Version: '1'
+              Configuration:
+                ClusterName: !ImportValue AuthFlow-ClusterName
+                ServiceName: !ImportValue AuthFlow-ServiceName
+                FileName: imagedefinitions.json
+              InputArtifacts:
+                - Name: BuildOutput
+
+        - Name: Verify
+          Actions:
+            - Name: VerifyService
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref DeployVerifyProject
+              InputArtifacts:
+                - Name: SourceOutput
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: CreatedBy
+          Value: Hari
+        - Key: aws-apn-id
+          Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
+
+Outputs:
+  PipelineName:
+    Description: CodePipeline name.
+    Value: !Ref AuthFlowPipeline
+
+  ArtifactBucketName:
+    Description: S3 artifact bucket name.
+    Value: !Ref PipelineArtifactBucket
+
+  ImageBuildProjectName:
+    Description: Image build CodeBuild project name.
+    Value: !Ref ImageBuildProject
+
+  DeployVerifyProjectName:
+    Description: Deployment verification CodeBuild project name.
+    Value: !Ref DeployVerifyProject
+
+  PipelineRoleArn:
+    Description: CodePipeline service role ARN.
+    Value: !GetAtt PipelineRole.Arn
+
+  ImageBuildRoleArn:
+    Description: Image build CodeBuild service role ARN.
+    Value: !GetAtt ImageBuildRole.Arn
