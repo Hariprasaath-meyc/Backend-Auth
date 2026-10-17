@@ -202,7 +202,7 @@ Resources:
       ServiceName: authflow-api-service
       Cluster: !Ref AuthFlowCluster
       TaskDefinition: !Ref AuthFlowApiTaskDefinition
-      DesiredCount: 0
+      DesiredCount: 1
       LaunchType: FARGATE
       PlatformVersion: LATEST
       NetworkConfiguration:
