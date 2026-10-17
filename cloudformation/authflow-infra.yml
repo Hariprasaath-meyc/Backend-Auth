@@ -159,7 +159,7 @@ Resources:
               awslogs-stream-prefix: api
 
         - Name: db
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:${PostgresImageTag}'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}:${PostgresImageTag}' 
           Essential: true
           PortMappings:
             - ContainerPort: 5432
