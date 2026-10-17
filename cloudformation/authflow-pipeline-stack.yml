@@ -273,8 +273,8 @@ Resources:
             Value: !ImportValue AuthFlow-RepositoryUri
           - Name: CLUSTER_NAME
             Value: !ImportValue AuthFlow-ClusterName
-          - Name: LOG_GROUP_NAME
-            Value: !ImportValue AuthFlow-LogGroupName
+          # - Name: LOG_GROUP_NAME
+          #   Value: !ImportValue AuthFlow-LogGroupName
       TimeoutInMinutes: 30
       Tags:
         - Key: Project
