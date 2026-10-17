@@ -30,11 +30,13 @@ phases:
       - echo "Pushing API images to ECR"
       - docker push "$REPOSITORY_URI:$IMAGE_TAG"
       - docker push "$REPOSITORY_URI:api"
+
       - echo "Pushing PostgreSQL images to ECR"
       - docker push "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG"
       - docker push "$REPOSITORY_URI:postgres"
+
       - echo "Creating imagedefinitions.json"
-      - printf '[{"name":"authflow-api","imageUri":"%s:%s"}]' "$REPOSITORY_URI" "$IMAGE_TAG" > imagedefinitions.json
+      - printf '[{"name":"authflow-api","imageUri":"%s:%s"},{"name":"db","imageUri":"%s:%s"}]' "$REPOSITORY_URI" "$IMAGE_TAG" "$REPOSITORY_URI" "$POSTGRES_IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
       - echo "API and PostgreSQL images pushed successfully"
 

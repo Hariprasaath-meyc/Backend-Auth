@@ -249,6 +249,13 @@ Resources:
       Name: authflow-image-build
       Description: Build and push the API and PostgreSQL images to the existing ECR repository.
       ServiceRole: !GetAtt ImageBuildRole.Arn
+
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !ImportValue AuthFlow-LogGroupName
+          StreamName: image-build
+
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-infra.yml
