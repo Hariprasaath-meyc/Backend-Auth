@@ -1,0 +1,70 @@
+
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: ap-south-1
+    REPOSITORY_NAME: authflow-auto-repository
+    CLUSTER_NAME: authflow-auto-cluster
+    LOG_GROUP_NAME: /ecs/authflow-auto
+
+phases:
+  pre_build:
+    commands:
+      - echo "Checking AWS identity and region"
+      - aws sts get-caller-identity
+      - aws configure get region || true
+
+  build:
+    commands:
+      - |
+        set -eu
+
+        echo "Checking ECR repository"
+
+        if aws ecr describe-repositories \
+          --repository-names "$REPOSITORY_NAME" \
+          --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+          echo "ECR repository already exists"
+        else
+          echo "Creating ECR repository"
+          aws ecr create-repository \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-tag-mutability MUTABLE \
+            --region "$AWS_DEFAULT_REGION"
+        fi
+
+        echo "Checking ECS cluster"
+
+        STATUS=$(aws ecs describe-clusters \
+          --clusters "$CLUSTER_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query 'clusters[0].status' \
+          --output text)
+
+        if [ "$STATUS" = "ACTIVE" ]; then
+          echo "ECS cluster already exists and is active"
+        else
+          echo "Creating ECS cluster"
+          aws ecs create-cluster \
+            --cluster-name "$CLUSTER_NAME" \
+            --settings name=containerInsights,value=enabled \
+            --region "$AWS_DEFAULT_REGION"
+        fi
+
+        echo "Checking CloudWatch log group"
+
+        if aws logs describe-log-groups \
+          --log-group-name-prefix "$LOG_GROUP_NAME" \
+          --region "$AWS_DEFAULT_REGION" \
+          --query "logGroups[?logGroupName=='$LOG_GROUP_NAME'].logGroupName" \
+          --output text | grep -Fxq "$LOG_GROUP_NAME"; then
+          echo "Log group already exists"
+        else
+          echo "Creating CloudWatch log group"
+          aws logs create-log-group \
+            --log-group-name "$LOG_GROUP_NAME" \
+            --region "$AWS_DEFAULT_REGION"
+        fi
+
+        echo "Infrastructure provisioning completed"
