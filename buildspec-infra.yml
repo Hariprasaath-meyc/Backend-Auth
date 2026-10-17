@@ -47,6 +47,7 @@ phases:
       - echo "Pushing PostgreSQL images to ECR"
       - docker push "$REPOSITORY_URI:$POSTGRES_IMAGE_TAG"
       - docker push "$REPOSITORY_URI:postgres"
+      
       - echo "Creating imagedefinitions.json"
       - printf '[{"name":"authflow-api","imageUri":"%s:%s"},{"name":"db","imageUri":"%s:%s"}]' "$REPOSITORY_URI" "$IMAGE_TAG" "$REPOSITORY_URI" "$POSTGRES_IMAGE_TAG" > imagedefinitions.json
       - cat imagedefinitions.json
