@@ -19,7 +19,7 @@ Parameters:
 
   GitHubOwner:
     Type: String
-    Default: Hariprasath-meyc
+    Default: Hariprasaath-meyc
 
   GitHubRepository:
     Type: String
