@@ -943,7 +943,7 @@ class AuthHandler(BaseHTTPRequestHandler):
         self.send_json_response(
             200,
             {
-                "status": "healthy",
+                "status": "healthy-api-updated",
                 "service": "auth-api"
             }
         )
