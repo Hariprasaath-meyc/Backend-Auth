@@ -107,7 +107,7 @@ Resources:
                 Resource: !Sub
                   - 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${ClusterName}/${ServiceName}'
                   - ClusterName: !ImportValue AuthFlow-ClusterName
-                    ServiceName: !ImportValue AuthFlow-ServiceName
+                    ServiceName: !ImportValue AuthFlow-ServiceNameOnly
 
               - Sid: ECSTaskDefinitionPermissions
                 Effect: Allow
@@ -235,7 +235,7 @@ Resources:
                 Resource: !Sub
                   - 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${ClusterName}/${ServiceName}'
                   - ClusterName: !ImportValue AuthFlow-ClusterName
-                    ServiceName: !ImportValue AuthFlow-ServiceName
+                    ServiceName: !ImportValue AuthFlow-ServiceNameOnly
 
               - Sid: ArtifactBucketAccess
                 Effect: Allow
@@ -337,7 +337,7 @@ Resources:
           - Name: CLUSTER_NAME
             Value: !ImportValue AuthFlow-ClusterName
           - Name: SERVICE_NAME
-            Value: !ImportValue AuthFlow-ServiceName
+            Value: !ImportValue AuthFlow-ServiceNameOnly
       TimeoutInMinutes: 20
       Tags:
         - Key: Project
@@ -403,7 +403,7 @@ Resources:
                 Version: '1'
               Configuration:
                 ClusterName: !ImportValue AuthFlow-ClusterName
-                ServiceName: !ImportValue AuthFlow-ServiceName
+                ServiceName: !ImportValue AuthFlow-ServiceNameOnly
                 FileName: imagedefinitions.json
               InputArtifacts:
                 - Name: BuildOutput

@@ -14,12 +14,12 @@ Parameters:
 
   RepositoryName:
     Type: String
-    Default: sample-repository-hp
+    Default: sample-repository-hp1
     Description: ECR repository name.
 
   ClusterName:
     Type: String
-    Default: sample-cluster-hp
+    Default: sample-cluster-hp1
     Description: ECS cluster name.
 
   ApiImageTag:
@@ -101,7 +101,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: /codepipeline/sample-hp
+      LogGroupName: /codepipeline/sample-hp1
       RetentionInDays: 30
       Tags:
         - Key: Project
@@ -262,8 +262,8 @@ Outputs:
     Export:
       Name: AuthFlow-LogGroupName
 
-  ServiceName:
-    Description: ECS service name for the ECS deployment action.
-    Value: !Ref AuthFlowApiService
+  ServiceNameOnly:
+    Description: ECS service name for the pipeline stack.
+    Value: authflow-api-service
     Export:
-      Name: AuthFlow-ServiceName
+      Name: AuthFlow-ServiceNameOnly
