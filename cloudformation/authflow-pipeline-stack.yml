@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   AuthFlow CI/CD pipeline stack. Reuses ECR, ECS cluster, ECS service,
   task execution role, and CloudWatch log group exported by the existing
-  foundation stack. Creates only the pipeline artifact bucket, pipeline role,
+  foundation stack. Creates the pipeline artifact bucket, pipeline role,
   CodeBuild roles/projects, and CodePipeline.
 
 Parameters:
@@ -30,7 +30,6 @@ Parameters:
     Default: main
 
 Resources:
-  # Pipeline Artifact Bucket
   PipelineArtifactBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -43,6 +42,8 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -51,7 +52,6 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # IAM Roles and Policies for CodePipeline and CodeBuild
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -73,6 +73,7 @@ Resources:
                 Action:
                   - s3:GetBucketLocation
                   - s3:ListBucket
+                  - s3:GetBucketAcl
                 Resource: !GetAtt PipelineArtifactBucket.Arn
 
               - Sid: ArtifactObjectAccess
@@ -98,18 +99,41 @@ Resources:
                   - !GetAtt ImageBuildProject.Arn
                   - !GetAtt DeployVerifyProject.Arn
 
-              - Sid: ECSDeployment
+              - Sid: ECSServicePermissions
                 Effect: Allow
                 Action:
-                  - ecs:DescribeClusters
                   - ecs:DescribeServices
+                  - ecs:UpdateService
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${ClusterName}/${ServiceName}'
+                  - ClusterName: !ImportValue AuthFlow-ClusterName
+                    ServiceName: !ImportValue AuthFlow-ServiceName
+
+              - Sid: ECSTaskDefinitionPermissions
+                Effect: Allow
+                Action:
                   - ecs:DescribeTaskDefinition
                   - ecs:RegisterTaskDefinition
-                  - ecs:UpdateService
-                  - ecs:TagResource
-                  - iam:PassRole
                 Resource: '*'
 
+              - Sid: ECSTagResource
+                Effect: Allow
+                Action:
+                  - ecs:TagResource
+                Resource: !Sub
+                  'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/authflow-api-task:*'
+                Condition:
+                  StringEquals:
+                    ecs:CreateAction: RegisterTaskDefinition
+
+              - Sid: PassTaskExecutionRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !ImportValue AuthFlow-TaskExecutionRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -118,7 +142,6 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # IAM Role for Image Building using CodeBuld
   ImageBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -162,6 +185,7 @@ Resources:
                 Action:
                   - s3:GetBucketLocation
                   - s3:ListBucket
+                  - s3:GetBucketVersioning
                 Resource: !GetAtt PipelineArtifactBucket.Arn
 
               - Sid: ArtifactObjectAccess
@@ -175,10 +199,11 @@ Resources:
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: '*'
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:log-stream:*'
+                  - LogGroupName: !ImportValue AuthFlow-LogGroupName
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -187,7 +212,6 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # IaM Role for Deployment Verification using ECSDeploy
   DeployVerifyRole:
     Type: AWS::IAM::Role
     Properties:
@@ -207,11 +231,11 @@ Resources:
               - Sid: ECSReadOnlyVerification
                 Effect: Allow
                 Action:
-                  - ecs:DescribeClusters
                   - ecs:DescribeServices
-                  - ecs:ListTasks
-                  - ecs:DescribeTasks
-                Resource: '*'
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:service/${ClusterName}/${ServiceName}'
+                  - ClusterName: !ImportValue AuthFlow-ClusterName
+                    ServiceName: !ImportValue AuthFlow-ServiceName
 
               - Sid: ArtifactBucketAccess
                 Effect: Allow
@@ -230,10 +254,11 @@ Resources:
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: '*'
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:log-stream:*'
+                  - LogGroupName: !ImportValue AuthFlow-LogGroupName
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -242,20 +267,17 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # CodeBuild Projects for Image Building and Deployment Verification
   ImageBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: authflow-image-build
       Description: Build and push the API and PostgreSQL images to the existing ECR repository.
       ServiceRole: !GetAtt ImageBuildRole.Arn
-
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
           GroupName: !ImportValue AuthFlow-LogGroupName
           StreamName: image-build
-
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec-infra.yml
@@ -273,8 +295,6 @@ Resources:
             Value: !ImportValue AuthFlow-RepositoryUri
           - Name: CLUSTER_NAME
             Value: !ImportValue AuthFlow-ClusterName
-          # - Name: LOG_GROUP_NAME
-          #   Value: !ImportValue AuthFlow-LogGroupName
       TimeoutInMinutes: 30
       Tags:
         - Key: Project
@@ -290,6 +310,11 @@ Resources:
       Name: authflow-deploy-verify
       Description: Verify ECS service stability after deployment.
       ServiceRole: !GetAtt DeployVerifyRole.Arn
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !ImportValue AuthFlow-LogGroupName
+          StreamName: deploy-verify
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -322,7 +347,6 @@ Resources:
         - Key: aws-apn-id
           Value: 'pc:eyl8vo7kcwv8k9qctzbathhiq'
 
-  # Overall CodePipeline Definition
   AuthFlowPipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
@@ -396,7 +420,6 @@ Resources:
                 ProjectName: !Ref DeployVerifyProject
               InputArtifacts:
                 - Name: SourceOutput
-
       Tags:
         - Key: Project
           Value: !Ref ProjectName
